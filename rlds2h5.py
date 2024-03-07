@@ -9,6 +9,7 @@ import time
 rlds_dataset_dir = '/home/qyb/RT-1/data/rt_dataset_builder/1.0.0/'
 h5_dataset_dir = '/home/qyb/RT-1/data/h5_dataset_builder'
 act_h5_dataset_dir = '/home/qyb/act/act/data/'
+episode_len = 40
 camera_names=['top']
 
 def process_data(episode):  
@@ -56,6 +57,38 @@ def process_data(episode):
     act_data_dict['/action'].pop(0)
     for cam_name in camera_names:
                 act_data_dict[f'/observations/images/{cam_name}'].pop(-1)
+    
+
+    # keep length to episode_len
+    current_length = len(act_data_dict['/action'])
+    remove_count = current_length - episode_len
+
+    # 如果需要删除的元素数量大于0
+    if remove_count > 0:
+        # 计算从头部和尾部各删除多少个元素才能使总长度为45
+        front_remove_count = remove_count // 2
+        back_remove_count = remove_count - front_remove_count
+
+        # 从前向后删除元素
+        for _ in range(front_remove_count):
+            act_data_dict['/action'].pop(0)
+            act_data_dict['/observations/qpos'].pop(0)
+            for cam_name in camera_names:
+                act_data_dict[f'/observations/images/{cam_name}'].pop(0)
+
+        # 从后向前删除元素
+        for _ in range(back_remove_count):
+            act_data_dict['/action'].pop(-1)
+            act_data_dict['/observations/qpos'].pop(-1)
+            for cam_name in camera_names:
+                act_data_dict[f'/observations/images/{cam_name}'].pop(-1)
+
+    assert(len(act_data_dict['/action'])==episode_len)
+    assert(len(act_data_dict['/action'])==len(act_data_dict['/observations/qpos']))
+    for cam_name in camera_names:
+        assert(len(act_data_dict['/action'])==len(act_data_dict[f'/observations/images/{cam_name}']))
+
+    
     return act_data_dict
 
 def save_episode_to_h5(episode_dict, output_filename):
@@ -76,7 +109,7 @@ def save_episode_to_h5(episode_dict, output_filename):
     t0 = time.time()
     max_timesteps=len(episode_dict['/action'])
     with h5py.File(output_filename, 'w', rdcc_nbytes=1024 ** 2 * 2) as root:
-        root.attrs['sim'] = True
+        root.attrs['sim'] = False
         obs = root.create_group('observations')
         image = obs.create_group('images')
         for cam_name in camera_names:
@@ -122,13 +155,13 @@ def main(args):
     if not os.path.exists(rlds_dataset_dir):
         raise ValueError(f"The RLDS directory '{rlds_dataset_dir}' does not exist.")
 
-    # rlds2h5(rlds_dataset_dir, h5_dataset_dir)
-    h5_file =  os.path.join(h5_dataset_dir, 'episode1.hdf5')  
-    read_h5_file(h5_file)
+    rlds2h5(rlds_dataset_dir, h5_dataset_dir)
+    # h5_file =  os.path.join(h5_dataset_dir, 'episode_1.hdf5')  
+    # read_h5_file(h5_file)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     #parser.add_argument('--rlds_dataset_dir', action='store', type=str, help='rlds dataset dir', required=False, default='/home/qyb/RT-1/data/rt_dataset_builder/1.0.0/')
     #parser.add_argument('--h5_dataset_dir', action='store', type=str, help='h5 dataset dir', required=False, default='/home/qyb/RT-1/data/rt_dataset_builder/1.0.0/')
-
+    #parser.add_argument('--episode_len', action='store', type=int, help='episode steps length', required=False, default=50)
     main(vars(parser.parse_args()))
