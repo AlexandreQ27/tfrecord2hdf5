@@ -41,9 +41,10 @@ def process_data(episode):
     for step in episode['steps']:  
         # for key, value in action_labels.items():  
         #     action_labels[key].append(step["action"][key])  
-        rotation_delta=step['action']['rotation_delta']
-        world_vector=step['action']['world_vector']
-        qpos=tf.concat([world_vector, rotation_delta], axis=0)
+        rotation_delta = step['action']['rotation_delta']
+        world_vector = step['action']['world_vector']
+        gripper_closedness_action = tf.cast([step['action']['gripper_closedness_action'][0]>0],tf.float32)
+        qpos=tf.concat([world_vector, rotation_delta,gripper_closedness_action], axis=0)
         act_data_dict['/observations/qpos'].append(qpos)
         # train_observations["image"].append(step["observation"]["image"])  
         # train_observations["natural_language_embedding"].append(tf.cast(step['observation']['natural_language_embedding'], tf.float32))  
@@ -83,9 +84,9 @@ def save_episode_to_h5(episode_dict, output_filename):
                                         chunks=(1, 480, 640, 3), )
         # compression='gzip',compression_opts=2,)
         # compression=32001, compression_opts=(0, 0, 0, 0, 9, 1, 1), shuffle=False)
-        qpos = obs.create_dataset('qpos', (max_timesteps, 6))
+        qpos = obs.create_dataset('qpos', (max_timesteps, 7))
         # qvel = obs.create_dataset('qvel', (max_timesteps, 6))
-        action = root.create_dataset('action', (max_timesteps, 6))
+        action = root.create_dataset('action', (max_timesteps, 7))
 
         for name, array in episode_dict.items():
             root[name][...] = array
@@ -101,7 +102,7 @@ def read_h5_file(h5_file):
 
 def rlds2h5(rlds_dataset_dir, h5_dataset_dir):
     builder = tfds.builder_from_directory(builder_dir=rlds_dataset_dir)
-    ds = builder.as_dataset(split='train')
+    ds = builder.as_dataset(split='test')
 
     # 遍历数据集并逐个处理和保存
     for i,episode in enumerate(ds):
@@ -121,9 +122,9 @@ def main(args):
     if not os.path.exists(rlds_dataset_dir):
         raise ValueError(f"The RLDS directory '{rlds_dataset_dir}' does not exist.")
 
-    rlds2h5(rlds_dataset_dir, h5_dataset_dir)
-    # h5_file =  os.path.join(act_h5_dataset_dir, 'episode_0.hdf5')  
-    # read_h5_file(h5_file)
+    # rlds2h5(rlds_dataset_dir, h5_dataset_dir)
+    h5_file =  os.path.join(h5_dataset_dir, 'episode1.hdf5')  
+    read_h5_file(h5_file)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
